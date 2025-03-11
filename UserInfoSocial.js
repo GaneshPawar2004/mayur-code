@@ -64,23 +64,6 @@ const UserInfoSocial = ({ userInfo, loggedInUserEmail, setUserInfo, dialogOpen, 
         console.error("Error fetching social data:", error);
       });
   }, [username]);
-
-  const handleFollowRequest = () => {
-    setLoading(true);
-    
-    axiosInstance
-      .post(`/user/${username}/follow-request`)
-      .then((response) => {
-        console.log("Follow request sent:", response.data);
-        setIsFollowing(true); // Assuming the follow request is successful
-      })
-      .catch((error) => {
-        console.error("Error sending follow request:", error);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  };
   
 
   const handleOpenChangeUsernameModal = () => setOpenChangeUsernameModal(true);
@@ -225,20 +208,6 @@ const UserInfoSocial = ({ userInfo, loggedInUserEmail, setUserInfo, dialogOpen, 
             </Typography>
             <Typography> {followers.length} followers</Typography>
             <Typography>{following.length} following</Typography>
-            <Typography><button 
-      onClick={handleFollowRequest} 
-      disabled={isFollowing || loading} 
-      style={{ 
-        padding: "8px 16px", 
-        backgroundColor: isFollowing ? "#ccc" : "#007bff", 
-        color: "#fff", 
-        border: "none", 
-        borderRadius: "5px", 
-        cursor: isFollowing ? "not-allowed" : "pointer" 
-      }}
-    >
-      {loading ? "Requesting..." : isFollowing ? "Following" : "Follow"}
-    </button></Typography>
           </Stack>
           <Typography variant="h6" gutterBottom>
             {userInfo.fullname}
