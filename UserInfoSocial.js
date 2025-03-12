@@ -26,6 +26,8 @@ import { useNavigate,useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useAuth } from 'routes/AuthContext';
 import LinkIcon from '@mui/icons-material/Link';
+import FollowersDialog from "./FollowersDialog"; // change
+
 
 const base_api_url = process.env.REACT_APP_BASE_API_URL;
 const isProduction = process.env.REACT_APP_RUNNING_MODE === 'production';
@@ -46,24 +48,100 @@ const UserInfoSocial = ({ userInfo, loggedInUserEmail, setUserInfo, dialogOpen, 
   const { username } = useParams();
   const [followers,setFollowers]=useState([]);
   const [following,setFollowing]=useState([]);
+  const [isFollowing, setIsFollowing] = useState(false);
+
+  const [openDialog, setOpenDialog] = useState(false);
+  const [dialogTitle, setDialogTitle] = useState("");
+  const [dialogList, setDialogList] = useState([]);
+
+  const handleOpenFollowers = () => {
+    setDialogTitle("Followers");
+    setDialogList(followers);
+    setOpenDialog(true);
+  };
+  
+  const handleOpenFollowing = () => {
+    setDialogTitle("Following");
+    setDialogList(following);
+    setOpenDialog(true);
+  };
+  
+
+
+  const handleFollow = async (username) => {
+    try {
+      const response = await axiosInstance.post(`/api/social/user/${username}/follow-request`, {}, {
+        headers: { Authorization: `Bearer ${access_token}` }
+      });
+  
+      if (response.status === 200) {
+        toast.success('Follow request sent successfully!');
+        
+        // Update UI to reflect follow status
+        setFollowing((prev) => [...prev, { username: username }]);
+        setIsFollowing(true);
+      } else {
+        toast.error('Failed to send follow request');
+      }
+    } catch (error) {
+      console.error('Error sending follow request:', error);
+      toast.error('Something went wrong');
+    }
+  };
+  
+  // 🔹 Handle Unfollow
+  const handleUnfollow = async (username) => {
+    try {
+        const authStateString = localStorage.getItem("authState");
+        if (!authStateString) throw new Error("No authState found in localStorage");
+
+        const authState = JSON.parse(authStateString);
+
+        if (!authState.access_token) throw new Error("No access token found");
+
+        const token = authState.access_token; // Extract token here
+
+        const response = await axiosInstance.post(
+            `http://localhost:5000/api/social/user/${username}/unfollow`,
+            {},
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+
+        console.log("Unfollowed successfully", response.data);
+    } catch (error) {
+        console.error("Error unfollowing user:", error.response?.data || error.message);
+    }
+};
+
 
   useEffect(() => {
-    // Fetch both followers and following
     const fetchFollowers = axiosInstance.get(`/api/social/user/${username}/followers`);
     const fetchFollowing = axiosInstance.get(`/api/social/user/${username}/following`);
+    const checkFollowing = axiosInstance.get(`/api/social/user/${username}/is-following`);
   
-    Promise.all([fetchFollowers, fetchFollowing])
-      .then(([followersRes, followingRes]) => {
+    Promise.all([fetchFollowers, fetchFollowing, checkFollowing])
+      .then(([followersRes, followingRes, followingCheckRes]) => {
         setFollowers(Array.isArray(followersRes.data.followers) ? followersRes.data.followers : []);
         setFollowing(Array.isArray(followingRes.data.following) ? followingRes.data.following : []);
   
-        console.log("Followers:", followersRes.data.followers.length);
-        console.log("Following:", followingRes.data.following.length);
+        // Use API response to check following status
+        setIsFollowing(followingCheckRes.data.is_following);
+  
+        console.log("Followers:", followersRes.data.followers);
+        console.log("Following:", followingRes.data.following);
+        console.log("Is Following:", followingCheckRes.data.is_following);
       })
       .catch((error) => {
         console.error("Error fetching social data:", error);
       });
   }, [username]);
+  
+  
   
 
   const handleOpenChangeUsernameModal = () => setOpenChangeUsernameModal(true);
@@ -180,35 +258,69 @@ const UserInfoSocial = ({ userInfo, loggedInUserEmail, setUserInfo, dialogOpen, 
           <input ref={fileInputRef} type="file" hidden onChange={handleAvatarChange} />
         </Grid>
         <Grid item xs={12} sm={8} md={9}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h4" component="h1" sx={{ mr: 0.5 }}>
-              {userInfo.username}
-            </Typography>
-            {isAuthenticated && current_plan_name != 'beginner' && <VerifiedUser sx={{ fontSize: 16, color: '#1DA1F2' }} />}
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h4" component="h1" sx={{ mr: 0.5 }}>
+                {userInfo.username}
+              </Typography>
 
-            {
-              loggedInUserEmail === userInfo.email ?? (
+              {isAuthenticated && current_plan_name !== 'beginner' && (
+                <VerifiedUser sx={{ fontSize: 16, color: '#1DA1F2' }} />
+              )}
+
+              {loggedInUserEmail === userInfo.email ? (
                 <>
-                  <Button variant="outlined" onClick={() => setDialogOpen(true)} startIcon={<EditIcon />} sx={{ ml: 2, mr: 1 }}>
+                  <Button
+                    variant="outlined"
+                    onClick={() => setDialogOpen(true)}
+                    startIcon={<EditIcon />}
+                    sx={{ ml: 2, mr: 1 }}
+                  >
                     Edit Profile
                   </Button>
                   <Button variant="outlined" onClick={handleOpenChangeUsernameModal}>
                     Edit Username
                   </Button>
                 </>
-              )
-              // : (
-              //     <Button variant="contained" color="primary" sx={{ ml: 2, mr: 1 }}>Follow</Button>
-              // )
-            }
-          </Box>
-          <Stack direction="row" spacing={4} sx={{ mb: 2 }}>
-            <Typography>
-              <strong>{userInfo.postsCount}</strong> posts
-            </Typography>
-            <Typography> {followers.length} followers</Typography>
-            <Typography>{following.length} following</Typography>
-          </Stack>
+              ) : (
+            <Button
+              variant={isFollowing ? "outlined" : "contained"}
+              color="primary"
+              sx={{ ml: 2, mr: 1 }}
+              onClick={() => isFollowing ? handleUnfollow(userInfo.username) : handleFollow(userInfo.username)}
+            >
+              {isFollowing ? "Following" : "Follow"}
+            </Button>
+          )}
+        </Box>
+
+        <Stack direction="row" spacing={4} sx={{ mb: 2 }}>
+                <Typography>
+                    <strong>{userInfo.postsCount}</strong> posts
+                </Typography>
+                <Typography 
+                    onClick={handleOpenFollowers} 
+                    sx={{ cursor: "pointer", color: "#1DA1F2" }}
+                >
+                    {followers?.length} followers
+                </Typography>
+                <Typography 
+                    onClick={handleOpenFollowing} 
+                    sx={{ cursor: "pointer", color: "#1DA1F2" }}
+                >
+                    {following?.length} following
+                </Typography>
+            </Stack>
+
+            {/* Followers & Following Dialog */}
+            <FollowersDialog
+                open={openDialog}
+                handleClose={() => setOpenDialog(false)}
+                title={dialogTitle}
+                users={dialogList || []} // Ensures it's never undefined
+                onFollow={handleFollow}
+                onUnfollow={handleUnfollow}
+                type={dialogTitle.toLowerCase()} // Pass "followers" or "following"
+            />
           <Typography variant="h6" gutterBottom>
             {userInfo.fullname}
           </Typography>
